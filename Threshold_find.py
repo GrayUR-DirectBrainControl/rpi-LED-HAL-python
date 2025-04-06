@@ -1,6 +1,7 @@
 import time
 from brainflow.board_shim import BoardShim, BrainFlowInputParams, BoardIds, LogLevels
 from brainflow.data_filter import DataFilter, WindowOperations, DetrendOperations 
+
 '''
 Remeber to enter virtual environment if running via RPI : 
 Run in terminal: 
@@ -35,7 +36,7 @@ def main():
 
     params = BrainFlowInputParams()
     params.serial_port = '/dev/ttyUSB0'
-    # PC = 'COM3' ; RPI = '/dev/ttyUSB0' 
+    # PC = 'COMX'(X is a number i.e 3 - find in device manager(windows)) ; RPI = '/dev/ttyUSB0' 
     board_id = BoardIds.CYTON_BOARD.value  
 
     sampling_rate = BoardShim.get_sampling_rate(board_id)
