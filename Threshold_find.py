@@ -59,9 +59,28 @@ def main():
             if data.shape[1] < sampling_rate:
                 continue
 
+            '''
+            alpha, beta, gamma = get_band_powers(data, sampling_rate, target_channel, nfft)
+            print(f"Alpha: {alpha:.2f} | Beta: {beta:.2f} | Gamma: {gamma:.2f}")
+
+            Remove all statements below and uncomment the above line
+            to see the raw values of alpha, beta and gamma.
+            '''
+
             alpha, beta, gamma = get_band_powers(data, sampling_rate, target_channel, nfft)
 
-            print(f"Alpha: {alpha:.2f} | Beta: {beta:.2f} | Gamma: {gamma:.2f}")
+            total_power = alpha + beta + gamma
+
+            # Prevent division by zero
+            if total_power == 0:
+                alpha_rel = beta_rel = gamma_rel = 0.0
+            else:
+                alpha_rel = alpha / total_power
+                beta_rel = beta / total_power
+                gamma_rel = gamma / total_power
+
+            print(f"Alpha: {alpha_rel:.3f} | Beta: {beta_rel:.3f} | Gamma: {gamma_rel:.3f} (Relative Powers)")
+
 
     except KeyboardInterrupt:
         print("Stopped by user.")
