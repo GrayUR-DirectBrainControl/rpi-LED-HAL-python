@@ -1,6 +1,10 @@
 # test_brainflow.py
+<<<<<<< HEAD
 from brainflow.board_shim
 import BoardShim, BrainFlowInputParams, BoardIds
+=======
+from brainflow.board_shim import BoardShim, BrainFlowInputParams, BoardIds
+>>>>>>> 7af493a098d9722683cebbe6ca444830c7fe62dc
 
 BoardShim.enable_dev_board_logger()
 params = BrainFlowInputParams()

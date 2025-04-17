@@ -50,6 +50,7 @@ def main():
         print("Reading EEG data... Press Ctrl+C to stop.\n")
 
         eeg_channels = BoardShim.get_eeg_channels(board_id)
+<<<<<<< HEAD
         target_channel = eeg_channels[2]  # Only one EEG channel for simplicity - Using C3(right hand movement)
         #Channel 2 = NP3 on the cyton board.
 
@@ -58,6 +59,12 @@ def main():
 
         while True:
             time.sleep(0.5)  # Wait 1 second for full window
+=======
+        target_channel = eeg_channels[0]  # Only one EEG channel for simplicity
+
+        while True:
+            time.sleep(1)  # Wait 1 second for full window
+>>>>>>> 7af493a098d9722683cebbe6ca444830c7fe62dc
             data = board.get_current_board_data(sampling_rate * 2)
 
             if data.shape[1] < sampling_rate:
