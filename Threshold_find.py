@@ -51,6 +51,7 @@ def main():
 
         eeg_channels = BoardShim.get_eeg_channels(board_id)
         target_channel = eeg_channels[2]  # Only one EEG channel for simplicity - Using C3(right hand movement)
+        #check for drops in alpha and beta band power.
         #Channel 2 = NP3 on the cyton boards
 
         #c3_channel = eeg_channels[2]  # C3 Right hand movement
