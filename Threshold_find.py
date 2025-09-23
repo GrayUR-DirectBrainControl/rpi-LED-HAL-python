@@ -1,7 +1,8 @@
 import time
 from brainflow.board_shim import BoardShim, BrainFlowInputParams, BoardIds, LogLevels
 from brainflow.data_filter import DataFilter, WindowOperations, DetrendOperations 
-
+from datetime import datetime #saving data with timestamps
+import csv
 '''
 Remeber to enter virtual environment if running via RPI : 
 Run in terminal: 
@@ -30,6 +31,7 @@ def get_band_powers(data, sampling_rate, channel, nfft):
     return alpha, beta, gamma
 
 
+
 def main():
     BoardShim.enable_dev_board_logger()
     BoardShim.set_log_level(LogLevels.LEVEL_INFO.value)
@@ -43,6 +45,15 @@ def main():
     nfft = DataFilter.get_nearest_power_of_two(sampling_rate)
 
     board = BoardShim(board_id, params)
+
+    #CSV setup for saving data
+    bands_csv_path = "bands_data.csv"
+    bands_csv = open(bands_csv_path, mode='w', newline='')
+    bands_writer = csv.writer(bands_csv)
+    bands_writer.writerow(['Timestamp', 'Alpha', 'Beta', 'Gamma', 'Alpha_Rel', 'Beta_Rel', 'Gamma_Rel'])  # Write header
+
+
+
 
     try:
         board.prepare_session()
@@ -86,6 +97,13 @@ def main():
 
             print(f"Alpha: {alpha_rel:.3f} | Beta: {beta_rel:.3f} | Gamma: {gamma_rel:.3f} (Relative Powers)")
 
+            # Save to CSV with timestamp
+            ts = datetime.now().isoformat(timespec="seconds") 
+            bands_writer.writerow([ts, f"{alpha:.3f}", f"{beta:.3f}", f"{gamma:.3f}",
+                                   f"{alpha_rel:.3f}", f"{beta_rel:.3f}", f"{gamma_rel:.3f}"])
+            bands_csv.flush() # Ensure data is written to file
+
+        
 
     except KeyboardInterrupt:
         print("Stopped by user.")
