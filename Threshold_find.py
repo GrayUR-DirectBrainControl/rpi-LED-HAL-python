@@ -3,12 +3,25 @@ from brainflow.board_shim import BoardShim, BrainFlowInputParams, BoardIds, LogL
 from brainflow.data_filter import DataFilter, WindowOperations, DetrendOperations 
 from datetime import datetime #saving data with timestamps
 import csv
+import os       #For file path operations
+import datetime # For timestamping csv files
+
+
+
 '''
 Remeber to enter virtual environment if running via RPI : 
 Run in terminal: 
  To activate: source ~/repos/rpi-LED-HAL-python/venv/bin/activate
  To deactivate: deactivate
 '''
+
+def add_csv_to_path(base="Band_Powers",out_dir="Recordings"):     
+    #Create 'data/bands_YYYY-MM-DD_HH-MM-SS.csv'..  
+    ts = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    os.makedirs(out_dir, exist_ok=True)
+    return os.path.join(out_dir, f"{base}_{ts}.csv")
+
+
 
 
 def get_band_powers(data, sampling_rate, channel, nfft):
@@ -46,13 +59,13 @@ def main():
 
     board = BoardShim(board_id, params)
 
-    #CSV setup for saving data
-    bands_csv_path = "bands_data.csv"
+    #CSV setup (timestamped filename, single 'data/' dir)
+    bands_csv_path = add_csv_to_path(base="Band_Powers", out_dir="Recordings")
     bands_csv = open(bands_csv_path, mode='w', newline='')
     bands_writer = csv.writer(bands_csv)
-    bands_writer.writerow(['Timestamp', 'Alpha', 'Beta', 'Gamma', 'Alpha_Rel', 'Beta_Rel', 'Gamma_Rel'])  # Write header
-
-
+    bands_writer.writerow(['Timestamp', 'Alpha', 'Beta', 'Gamma',
+                           'Alpha_Rel', 'Beta_Rel', 'Gamma_Rel'])  # header
+    print(f"Writing EEG band data to: {bands_csv_path}")
 
 
     try:
@@ -67,6 +80,7 @@ def main():
 
         #c3_channel = eeg_channels[2]  # C3 Right hand movement
         #c4_channel = eeg_channels[3]  # C4 Left hand movement
+
 
         while True:
             time.sleep(1)  # Wait 1 second for full window
@@ -101,6 +115,9 @@ def main():
             ts = datetime.now().isoformat(timespec="seconds") 
             bands_writer.writerow([ts, f"{alpha:.3f}", f"{beta:.3f}", f"{gamma:.3f}",
                                    f"{alpha_rel:.3f}", f"{beta_rel:.3f}", f"{gamma_rel:.3f}"])
+
+             #Save files in a dedicated folder with timestamped filenames
+
             bands_csv.flush() # Ensure data is written to file
 
         
@@ -110,6 +127,8 @@ def main():
     finally:
         board.stop_stream()
         board.release_session()
+        bands_csv.flush()
+        bands_csv.close()
         print("Session released.")
 
 if __name__ == '__main__':
