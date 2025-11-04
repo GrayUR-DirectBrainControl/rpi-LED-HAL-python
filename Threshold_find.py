@@ -5,6 +5,7 @@ from datetime import datetime #saving data with timestamps
 import csv
 import os       #For file path operations
 import datetime # For timestamping csv files
+import keyboard  # For keypress detection
 
 
 
@@ -64,7 +65,7 @@ def main():
     bands_csv = open(bands_csv_path, mode='w', newline='')
     bands_writer = csv.writer(bands_csv)
     bands_writer.writerow(['Timestamp', 'Alpha', 'Beta', 'Gamma',
-                           'Alpha_Rel', 'Beta_Rel', 'Gamma_Rel'])  # header
+                           'Alpha_Rel', 'Beta_Rel', 'Gamma_Rel', 'Marker'])  # header
     print(f"Writing EEG band data to: {bands_csv_path}")
 
 
@@ -81,7 +82,7 @@ def main():
         #c3_channel = eeg_channels[2]  # C3 Right hand movement
         #c4_channel = eeg_channels[3]  # C4 Left hand movement
 
-
+        event_num = 1  # Marker index
         while True:
             time.sleep(1)  # Wait 1 second for full window
             data = board.get_current_board_data(sampling_rate * 2)
@@ -111,10 +112,18 @@ def main():
 
             print(f"Alpha: {alpha_rel:.3f} | Beta: {beta_rel:.3f} | Gamma: {gamma_rel:.3f} (Relative Powers)")
 
+
             # Save to CSV with timestamp
             ts = datetime.now().isoformat(timespec="seconds") 
+
+            marker = ""
+            if keyboard.is_pressed("space"):
+                marker = f"EVENT_{event_num}"
+                print(f"Marker added at {ts}")
+                event_num += 1
+
             bands_writer.writerow([ts, f"{alpha:.3f}", f"{beta:.3f}", f"{gamma:.3f}",
-                                   f"{alpha_rel:.3f}", f"{beta_rel:.3f}", f"{gamma_rel:.3f}"])
+                                   f"{alpha_rel:.3f}", f"{beta_rel:.3f}", f"{gamma_rel:.3f}", marker])
 
              #Save files in a dedicated folder with timestamped filenames
 
