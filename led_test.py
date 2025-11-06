@@ -1,7 +1,7 @@
 from gpiozero import LED
 import time
 
-# GPIO pin mapping (update based on your actual wiring)
+# GPIO pin mapping 
 left_imag = LED(17)   # Left arm imagery
 left_move = LED(27)   # Left arm actual
 fault_led = LED(22)   # Fault detector
@@ -25,7 +25,7 @@ try:
         time.sleep(0.5)
 
 except KeyboardInterrupt:
-    print("Test stopped by user. Turning all LEDs off...")
+    print("Test stopped. Turning all LEDs off...")
     for led in leds:
         led.off()
     print("All LEDs OFF.")
