@@ -23,8 +23,6 @@ def add_csv_to_path(base="Band_Powers",out_dir="Recordings"):
     return os.path.join(out_dir, f"{base}_{ts}.csv")
 
 
-
-
 def get_band_powers(data, sampling_rate, channel, nfft):
     DataFilter.detrend(data[channel], DetrendOperations.LINEAR.value)
     psd = DataFilter.get_psd_welch(
