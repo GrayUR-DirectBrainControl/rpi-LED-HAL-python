@@ -122,7 +122,7 @@ def main():
         mean_alphaL, mean_betaL, mean_gammaL, mean_alphaR, mean_betaR, mean_gammaR = mean_vals
         std_alphaL, std_betaL, std_gammaL, std_alphaR, std_betaR, std_gammaR = std_vals
 
-        TH_ALPHA_DROP = std_alphaL  # same magnitude for both sides
+        TH_ALPHA_DROP = std_alphaL  # same magnitude for both sides(**Pending confirmation**)
         TH_BETA_RISE  = std_betaL
         TH_GAMMA_HIGH = mean_gammaL + 1.5 * std_gammaL
 
@@ -154,13 +154,30 @@ def main():
             total_L = alpha_L + beta_L + gamma_L
             total_R = alpha_R + beta_R + gamma_R
 
-             # Fault detection: no valid data
-            if total_L == 0 or total_R == 0:
-                fault_led.on() 
+            # Fault detection: no valid data
+            # if total_L == 0 or total_R == 0:
+            #     fault_led.on() 
+            #     print("Fault: no valid EEG data.")
+            #     continue
+            # else:
+            #     fault_led.off()
+
+            # Fault Detection Logic 
+            if total_L == 0 or total_R == 0:        # Lower fault: no valid data
+                fault_led.on()
                 print("Fault: no valid EEG data.")
+                continue
+            elif total_L < 1e-6 or total_R < 1e-6:  # Lower fault: extremely low power (basically noise floor)
+                fault_led.on()
+                print("Fault: EEG data too low.")
+                continue
+            elif total_L > 1200 or total_R > 1200:  # Upper fault: impossible EEG value (artifact / hardware issue)
+                fault_led.on()
+                print("Fault: EEG power excessively high (artifact/hardware issue).")
                 continue
             else:
                 fault_led.off()
+
 
             alphaL_rel = alpha_L / total_L
             betaL_rel = beta_L / total_L
@@ -181,6 +198,7 @@ def main():
             gamma_rise_R = gammaR_rel > TH_GAMMA_HIGH
 
             #LED Logic 
+            #**Look into adding tug-of-war style control where one hand movement can cancel the other i.e only the stronger LED lights up**
             # Right hand detection (C4 activity)
             if alpha_drop_L and beta_rise_L and not gamma_rise_L:
                 right_imag.on()
@@ -206,8 +224,6 @@ def main():
             else:
                 left_imag.off()
                 left_move.off()
-
-           
 
             # Print values
             print(f"L: Alpha={alphaL_rel:.3f} | Beta={betaL_rel:.3f} | Gamma={gammaL_rel:.3f} | "
