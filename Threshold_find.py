@@ -15,6 +15,12 @@ Remeber to enter virtual environment if running via RPI :
 Run in terminal: 
  To activate: source ~/repos/rpi-LED-HAL-python/venv/bin/activate
  To deactivate: deactivate
+ To Run: sudo -E ./venv/bin/python3 Threshold_find.py
+
+--- MARKER KEY BINDINGS ---
+  Left arrow  = Left-hand event  → marker format: l1, l2, l3 ...
+  Right arrow = Right-hand event → marker format: r1, r2, r3 ...
+  Both share a single incrementing counter (e.g. l1, r2, l3, r4 ...)
 '''
 
 def add_csv_to_path(base="Band_Powers",out_dir="Recordings"):     
@@ -82,13 +88,10 @@ def main():
     try:
         board.prepare_session()
         board.start_stream()
-        print("Reading EEG data... Press Ctrl+C to stop.\n")
+        print("Reading EEG data... Press Ctrl+C to stop.")
+        print("Press LEFT ARROW for left-hand events, RIGHT ARROW for right-hand events.\n")
 
         eeg_channels = BoardShim.get_eeg_channels(board_id)
-
-        #target_channel = eeg_channels[2]  # Only one EEG channel for simplicity - Using C3(right hand movement)
-        #check for drops in alpha and beta band power.
-        #Channel 2 = NP3 on the cyton boards
 
         c3_channel = eeg_channels[2]  # C3 Right hand motor cortex
         c4_channel = eeg_channels[3]  # C4 Left hand motor cortex
@@ -130,7 +133,8 @@ def main():
         print(f"Thresholds = Alpha: {TH_ALPHA_DROP:.3f}, Beta: {TH_BETA_RISE:.3f}, Gamma: {TH_GAMMA_HIGH:.3f}\n")
         # End baseline calibration
 
-        event_num = 1  # Marker index
+        event_num = 1  # Shared marker counter (increments for both left and right events)
+
         while True:
             time.sleep(1)  # Wait 1 second for full window
             data = board.get_current_board_data(sampling_rate * 2)
@@ -138,29 +142,12 @@ def main():
             if data.shape[1] < sampling_rate:
                 continue
 
-            '''
-            alpha, beta, gamma = get_band_powers(data, sampling_rate, target_channel, nfft)
-            print(f"Alpha: {alpha:.2f} | Beta: {beta:.2f} | Gamma: {gamma:.2f}")
-
-            Remove all statements below and uncomment the above line
-            to see the raw values of alpha, beta and gamma.
-            '''
-
-            #alpha, beta, gamma = get_band_powers(data, sampling_rate, target_channel, nfft)
-             # Get bands for left and right
+            # Get bands for left and right
             alpha_L, beta_L, gamma_L = get_band_powers(data, sampling_rate, c4_channel, nfft)
             alpha_R, beta_R, gamma_R = get_band_powers(data, sampling_rate, c3_channel, nfft)
 
             total_L = alpha_L + beta_L + gamma_L
             total_R = alpha_R + beta_R + gamma_R
-
-            # Fault detection: no valid data
-            # if total_L == 0 or total_R == 0:
-            #     fault_led.on() 
-            #     print("Fault: no valid EEG data.")
-            #     continue
-            # else:
-            #     fault_led.off()
 
             # Fault Detection Logic 
             if total_L == 0 or total_R == 0:        # Lower fault: no valid data
@@ -177,7 +164,6 @@ def main():
                 continue
             else:
                 fault_led.off()
-
 
             alphaL_rel = alpha_L / total_L
             betaL_rel = beta_L / total_L
@@ -198,7 +184,6 @@ def main():
             gamma_rise_R = gammaR_rel > TH_GAMMA_HIGH
 
             #LED Logic 
-            #**Look into adding tug-of-war style control where one hand movement can cancel the other i.e only the stronger LED lights up**
             # Right hand detection (C4 activity)
             if alpha_drop_L and beta_rise_L and not gamma_rise_L:
                 right_imag.on()
@@ -229,18 +214,24 @@ def main():
             print(f"L: Alpha={alphaL_rel:.3f} | Beta={betaL_rel:.3f} | Gamma={gammaL_rel:.3f} | "
                   f"R: Alpha={alphaR_rel:.3f} | Beta={betaR_rel:.3f} | Gamma={gammaR_rel:.3f}")
 
-            #print(f"Alpha: {alpha_rel:.3f} | Beta: {beta_rel:.3f} | Gamma: {gamma_rel:.3f} (Relative Powers)")
-
-
             # Save to CSV with timestamp
-            ts = datetime.now().isoformat(timespec="seconds") 
+            ts = datetime.now().isoformat(timespec="seconds")
 
+            # --- Marker logic ---
+            # Left arrow  → l{n}  (left-hand event)
+            # Right arrow → r{n}  (right-hand event)
+            # Both share a single incrementing counter.
             marker = ""
-            if keyboard.is_pressed("space"):
-                marker = f"EVENT_{event_num}"
-                print(f"Marker added at {ts}")
+            if keyboard.is_pressed("left"):
+                marker = f"l{event_num}"
+                print(f"Left-hand marker '{marker}' added at {ts}")
                 event_num += 1
-                time.sleep(0.3)  # debounce to avoid duplicates
+                time.sleep(0.3)  # debounce
+            elif keyboard.is_pressed("right"):
+                marker = f"r{event_num}"
+                print(f"Right-hand marker '{marker}' added at {ts}")
+                event_num += 1
+                time.sleep(0.3)  # debounce
 
             bands_writer.writerow([
                 ts,
@@ -249,13 +240,9 @@ def main():
                 f"{alphaL_rel:.3f}", f"{betaL_rel:.3f}", f"{gammaL_rel:.3f}",
                 f"{alphaR_rel:.3f}", f"{betaR_rel:.3f}", f"{gammaR_rel:.3f}",
                 marker
-            ])
+            ]) 
 
-             #Save files in a dedicated folder with timestamped filenames
-
-            bands_csv.flush() # Ensure data is written to file
-
-        
+            bands_csv.flush()  # Ensure data is written to file
 
     except KeyboardInterrupt:   #Ctrl + C to stop
         print("\nStopped by user.")
