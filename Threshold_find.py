@@ -4,11 +4,15 @@ from brainflow.data_filter import DataFilter, WindowOperations, DetrendOperation
 from datetime import datetime #saving data with timestamps
 import csv  #For csv writing
 import os       #For file path operations
-import keyboard  # For keypress detection 
 from gpiozero import LED #For GPIO LED control
 import numpy as np #For numerical operations(mean and std)
 
-
+# For keypress detection 
+import sys
+import tty
+import termios
+import select
+# 
 
 '''
 Remeber to enter virtual environment if running via RPI : 
@@ -16,11 +20,16 @@ Run in terminal:
  To activate: source ~/repos/rpi-LED-HAL-python/venv/bin/activate
  To deactivate: deactivate
  To Run: sudo -E ./venv/bin/python3 Threshold_find.py
+'''
 
---- MARKER KEY BINDINGS ---
-  Left arrow  = Left-hand event  → marker format: l1, l2, l3 ...
-  Right arrow = Right-hand event → marker format: r1, r2, r3 ...
-  Both share a single incrementing counter (e.g. l1, r2, l3, r4 ...)
+'''
+MARKER KEY BINDINGS 
+ 10s automatic window:
+    Left arrow  = Left-hand Movement  
+    Right arrow = Right-hand Movement
+    Down arrow  = Left-hand Imagery  
+    Up arrow = Right-hand Imagery
+ Space = REST toggle (press once = start, press again = end)
 '''
 
 def add_csv_to_path(base="Band_Powers",out_dir="Recordings"):     
@@ -55,6 +64,13 @@ def relative(a, b, g):
         return 0.0, 0.0, 0.0
     return a/tot, b/tot, g/tot
 
+def get_key():
+    dr, _, _ = select.select([sys.stdin], [], [], 0)
+    if dr:
+        return sys.stdin.read(1)
+    return None
+
+
 
 def main():
     BoardShim.enable_dev_board_logger()
@@ -70,6 +86,11 @@ def main():
 
     board = BoardShim(board_id, params)
 
+    # Enable raw terminal mode for arrow key detection
+    fd = sys.stdin.fileno()
+    old_settings = termios.tcgetattr(fd)
+    tty.setcbreak(fd)
+
     #CSV setup (timestamped filename, single 'data/' dir)
     bands_csv_path = add_csv_to_path(base="Band_Powers", out_dir="Recordings")
     bands_csv = open(bands_csv_path, mode='w', newline='')
@@ -78,18 +99,19 @@ def main():
                 'AlphaL_rel','BetaL_rel','GammaL_rel','AlphaR_rel','BetaR_rel','GammaR_rel','Marker'])  # header
     print(f"Writing EEG band data to: {bands_csv_path}")
 
+    '''
     # GPIO setup
     left_imag  = LED(17)
     left_move  = LED(27)
     right_imag = LED(24)
     right_move = LED(23)
     fault_led  = LED(22) 
+    '''
 
     try:
         board.prepare_session()
         board.start_stream()
         print("Reading EEG data... Press Ctrl+C to stop.")
-        print("Press LEFT ARROW for left-hand events, RIGHT ARROW for right-hand events.\n")
 
         eeg_channels = BoardShim.get_eeg_channels(board_id)
 
@@ -98,15 +120,15 @@ def main():
 
         #Pre-session baseline calibration
         print("\nBaseline calibration starting soon.")
-        print("Play 10 Hz relaxation tone when countdown begins (eyes closed recommended).")
+        print("Play 10 Hz relaxation tone when countdown begins (eyes closed).")
         time.sleep(3)
-        for i in range(10, 0, -1):
+        for i in range(20, 0, -1):
             print(f"Calibrating... {i}s remaining")
             time.sleep(1)
 
         baseline_samples = []
         t0 = time.time()
-        while time.time() - t0 < 10:
+        while time.time() - t0 < 20:  # Collect 20 seconds of baseline data
             data = board.get_current_board_data(sampling_rate * 2)
             if data.shape[1] < sampling_rate:
                 time.sleep(0.5)
@@ -133,7 +155,11 @@ def main():
         print(f"Thresholds = Alpha: {TH_ALPHA_DROP:.3f}, Beta: {TH_BETA_RISE:.3f}, Gamma: {TH_GAMMA_HIGH:.3f}\n")
         # End baseline calibration
 
-        event_num = 1  # Shared marker counter (increments for both left and right events)
+        # EVENT STATE TRACKING 
+        active_event = None
+        event_start_time = None
+        EVENT_DURATION = 10
+        rest_active = False
 
         while True:
             time.sleep(1)  # Wait 1 second for full window
@@ -149,21 +175,22 @@ def main():
             total_L = alpha_L + beta_L + gamma_L
             total_R = alpha_R + beta_R + gamma_R
 
+            
             # Fault Detection Logic 
             if total_L == 0 or total_R == 0:        # Lower fault: no valid data
-                fault_led.on()
+                #fault_led.on()
                 print("Fault: no valid EEG data.")
                 continue
             elif total_L < 1e-6 or total_R < 1e-6:  # Lower fault: extremely low power (basically noise floor)
-                fault_led.on()
+                #fault_led.on()
                 print("Fault: EEG data too low.")
                 continue
             elif total_L > 1200 or total_R > 1200:  # Upper fault: impossible EEG value (artifact / hardware issue)
-                fault_led.on()
+                #fault_led.on()
                 print("Fault: EEG power excessively high (artifact/hardware issue).")
                 continue
-            else:
-                fault_led.off()
+            #else:
+                #fault_led.off()
 
             alphaL_rel = alpha_L / total_L
             betaL_rel = beta_L / total_L
@@ -183,6 +210,7 @@ def main():
             beta_rise_R = betaR_rel > (mean_betaR + TH_BETA_RISE)
             gamma_rise_R = gammaR_rel > TH_GAMMA_HIGH
 
+            '''
             #LED Logic 
             # Right hand detection (C4 activity)
             if alpha_drop_L and beta_rise_L and not gamma_rise_L:
@@ -209,6 +237,8 @@ def main():
             else:
                 left_imag.off()
                 left_move.off()
+              
+            ''' #Not using LEDs for this phase, just printing values and saving to CSV
 
             # Print values
             print(f"L: Alpha={alphaL_rel:.3f} | Beta={betaL_rel:.3f} | Gamma={gammaL_rel:.3f} | "
@@ -216,23 +246,69 @@ def main():
 
             # Save to CSV with timestamp
             ts = datetime.now().isoformat(timespec="seconds")
-
-            # --- Marker logic ---
-            # Left arrow  → l{n}  (left-hand event)
-            # Right arrow → r{n}  (right-hand event)
-            # Both share a single incrementing counter.
+            
             marker = ""
-            if keyboard.is_pressed("left"):
-                marker = f"l{event_num}"
-                print(f"Left-hand marker '{marker}' added at {ts}")
-                event_num += 1
-                time.sleep(0.3)  # debounce
-            elif keyboard.is_pressed("right"):
-                marker = f"r{event_num}"
-                print(f"Right-hand marker '{marker}' added at {ts}")
-                event_num += 1
-                time.sleep(0.3)  # debounce
+            # START EVENTS 
+            key = get_key()
 
+            if key:
+            
+                # Arrow keys send escape sequences:
+                # Left  = \x1b[D
+                # Right = \x1b[C
+                # Up    = \x1b[A
+                # Down  = \x1b[B
+
+                if key == '\x1b':  # start of arrow sequence
+                    seq = sys.stdin.read(2)
+                    full_key = key + seq
+
+                    if active_event is None:
+
+                        if full_key == '\x1b[D':  # LEFT ARROW
+                            active_event = "LEFT_MOVE"
+                            event_start_time = time.time()
+                            marker = "LEFT_MOVE_START"
+                            print(marker)
+
+                        elif full_key == '\x1b[C':  # RIGHT ARROW
+                            active_event = "RIGHT_MOVE"
+                            event_start_time = time.time()
+                            marker = "RIGHT_MOVE_START"
+                            print(marker)
+
+                        elif full_key == '\x1b[A':  # UP ARROW
+                            active_event = "RIGHT_IMAG"
+                            event_start_time = time.time()
+                            marker = "RIGHT_IMAG_START"
+                            print(marker)
+
+                        elif full_key == '\x1b[B':  # DOWN ARROW
+                            active_event = "LEFT_IMAG"
+                            event_start_time = time.time()
+                            marker = "LEFT_IMAG_START"
+                            print(marker)
+
+                elif key == ' ':
+                    if not rest_active:
+                        rest_active = True
+                        active_event = "REST"
+                        marker = "REST_START"
+                        print(marker)
+                    else:
+                        rest_active = False
+                        marker = "REST_END"
+                        active_event = None
+                        print(marker)
+
+            # AUTO END 10s EVENTS
+            if active_event is not None and active_event != "REST":
+                if time.time() - event_start_time >= EVENT_DURATION:
+                    marker = f"{active_event}_END"
+                    print(marker)
+                    active_event = None
+                    event_start_time = None
+            
             bands_writer.writerow([
                 ts,
                 f"{alpha_L:.3f}", f"{beta_L:.3f}", f"{gamma_L:.3f}",
@@ -251,7 +327,8 @@ def main():
         board.release_session()
         bands_csv.flush()
         bands_csv.close()
-        left_imag.off(); left_move.off(); right_imag.off(); right_move.off(); fault_led.off()
+        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+        #left_imag.off(); left_move.off(); right_imag.off(); right_move.off(); fault_led.off()
         print("Session released. All LEDs off.")
 
 if __name__ == '__main__':
